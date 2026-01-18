@@ -7,7 +7,7 @@ This document lists the components identified in the `v1.sch` and `v1.brd` files
 | Designator | Part Name | Description | Manufacturer | Datasheet |
 | :--- | :--- | :--- | :--- | :--- |
 | **U1** | TPS552892RYQR | 36-V, 8-A Buck-Boost Converter | Texas Instruments | [TPS552892 Datasheet](https://www.ti.com/product/TPS552892) |
-| **U5** | ESP32-WROOM-32D | Wi-Fi + BT + BLE MCU Module | Espressif Systems | [ESP32-WROOM-32D Datasheet](https://www.espressif.com/en/products/modules/esp32) |
+| **NA** | ESP32-WROOM-32 S3 | Wi-Fi + BT + BLE MCU Module | Espressif Systems |[ESP32S3 datasheet](https://github.com/AleReb/miniMadre/blob/main/documentation/datasheets/esp32-s3-wroom-1_wroom-1u_datasheet_en.pdf)|
 | **U4** | BQ24075RGTT | 1.5-A USB-Friendly Li-Ion Battery Charger | Texas Instruments | [BQ24075 Datasheet](https://www.ti.com/product/BQ24075) |
 | **U6** | BQ27441DRZT | System-Side Impedance Track Fuel Gauge | Texas Instruments | [BQ27441-G1 Datasheet](https://www.ti.com/product/BQ27441-G1) |
 | **IC1** | DS3231 | Extremely Accurate I2C-Integrated RTC/TCXO/Crystal | Maxim/Analog Devices | [DS3231 Datasheet](https://www.analog.com/media/en/technical-documentation/data-sheets/DS3231.pdf) |
