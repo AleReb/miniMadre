@@ -1,0 +1,369 @@
+\documentclass[9pt,a4paper,twocolumn,twoside]{rho-class/rho}
+
+\usepackage[english]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{pgfplots}
+\usepackage{tikz}
+\usepackage{float}
+\usepackage{comment}
+\usepackage{hyperref}
+\usepackage{array}
+
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning}
+\tikzset{
+    flow/.style={node distance=0.75cm, every node/.style={font=\footnotesize}},
+    startstop/.style={rectangle, rounded corners, minimum width=1.8cm, minimum height=0.5cm, draw, align=center},
+    process/.style={rectangle, minimum width=2.2cm, minimum height=0.5cm, draw, align=center},
+    decision/.style={diamond, aspect=2, draw, align=center, inner sep=1pt, text width=2.0cm},
+    arrow/.style={thick, -{Latex[length=2mm]}}
+}
+
+\doctype{Reporte de Diseño}
+\title{Documentación de decisiones de diseño para asignación de pines y control de alimentación en "Placa Madre Mini"}
+
+\author[{\textasteriskcentered},a]{Adonay, Sebastián}
+\affil[a]{Centro de Investigación en Tecnologías para la Sociedad C+, Universidad del Desarrollo}
+\dates{Este manuscrito ha sido compilado el \today}
+
+\corres{\textsuperscript{\textasteriskcentered}Autor correspondiente: \href{mailto:s.adonay@udd.cl}{s.adonay@udd.cl} (S. Adonay).}
+
+\docinfo{Documento interno de apoyo al diseño electrónico y firmware.}
+
+\journalname{Documentación Interna}
+\journal{C+ UDD 2026}
+\theday{\today}
+
+\begin{abstract}
+Se documentan las principales decisiones de diseño adoptadas para la asignación de pines de una placa basada en ESP32-S3-WROOM-1, incluyendo buses de comunicación, expansión mediante conector IDC, medición de batería, control de NeoPixel y manejo de rieles de alimentación conmutables para periféricos y módem. Además, se explicita la justificación para reservar ciertos GPIO y se resume el pinout global e interfaz de expansión.
+\end{abstract}
+
+\keywords{ESP32-S3, Pinout, GPIO, I2C, SPI, UART, NeoPixel, Power Gating, SIM7600, IDC}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{firststyle}
+
+\section{Introducción}
+
+\rhostart{E}l presente documento resume las decisiones de diseño adoptadas para una placa basada en \textbf{ESP32-S3-WROOM-1}, con énfasis en la asignación funcional de pines, la segregación de rieles de alimentación y la exposición de señales hacia un conector de expansión IDC.
+
+El objetivo principal fue construir una arquitectura ordenada y mantenible, adecuada tanto para desarrollo de firmware como para revisión de hardware, evitando conflictos con pines sensibles de arranque, USB nativo y señales con restricciones funcionales.
+
+\section{Descripción general del sistema}
+
+La arquitectura considera tres rieles principales de interés:
+
+\begin{itemize}
+    \item \texttt{3V3}: riel principal siempre activo.
+    \item \texttt{3V3\_INT}: riel 3.3V conmutable para periféricos generales y externos.
+    \item \texttt{3V3\_MODEM}: riel 3.3V conmutable dedicado al módem.
+    \item \texttt{5V\_INT}: riel 5.0V conmutable para sensor "Plantower" y periféricos externos.
+\end{itemize}
+
+El microcontrolador mantiene alimentación permanente, mientras que periféricos de mayor consumo o de operación intermitente se energizan selectivamente mediante MOSFET P-channel en configuración \textit{high-side}.
+
+\section{Decisiones de diseño}
+
+\subsection{Buses por defecto}
+
+Se decidió mantener los buses principales usando la asignación estándar del entorno Arduino IDE para la placa \texttt{ESP32S3 Dev Module}, con el fin de facilitar compatibilidad, depuración y legibilidad del firmware:
+
+\begin{itemize}
+    \item \textbf{I2C}: GPIO8 (SDA) y GPIO9 (SCL).
+    \item \textbf{SPI}: GPIO10 (SS), GPIO11 (MOSI), GPIO12 (SCK) y GPIO13 (MISO).
+\end{itemize}
+
+En el caso particular del conector IDC, la señal \texttt{SS} no fue exportada, debido a que la tarjeta SD reside en la placa principal y utiliza localmente dicha línea.
+
+\newpage
+
+\subsection{UARTs}
+
+Se reservaron UARTs diferenciadas para propósitos distintos:
+
+\begin{itemize}
+    \item UART auxiliar en GPIO4 y GPIO5, conectado a conector "Plantower"
+    \item UART dedicada al módem en GPIO15 y GPIO16.
+    \item UART0 de programación y depuración en GPIO43 y GPIO44.
+\end{itemize}
+
+\subsection{Medición de batería}
+
+La medición analógica del voltaje de batería se fijó en \textbf{GPIO1}, correspondiente a un canal ADC válido del ESP32-S3.
+
+\subsection{NeoPixel}
+
+La señal de control del NeoPixel se asignó a \textbf{GPIO14}. Este pin también se mantuvo disponible en el conector IDC, permitiendo flexibilidad de uso futuro.
+
+\subsection{Power gating}
+
+Se adoptó control de rieles mediante MOSFET P-channel:\\
+\textbf{Nota: los controles de gate 3v3 y modem se activan en LOW y el de 5v en HIGH}
+\begin{itemize}
+    \item \textbf{GPIO41}: control de \texttt{Gate\_3V3INT}.
+    \item \textbf{GPIO42}: control de \texttt{Gate\_MODEM}.
+\end{itemize}
+
+La conmutación se realiza por el lado alto (\textit{high-side}), evitando corte de GND y reduciendo riesgos de retroalimentación a través de interfaces lógicas.
+
+A su vez, el riel de 5V se activa al entregar voltaje al pin ENABLE del regulador AP63357 de 5V.
+\begin{itemize}
+    \item \textbf{GPIO2}: control de \texttt{EN\_5V\_INT}.
+\end{itemize}
+
+
+\subsection{Pines reservados o evitados}
+
+Se decidió evitar o reservar los siguientes GPIO por su naturaleza funcional:
+
+\begin{itemize}
+    \item GPIO0 y GPIO3: pines de \textit{strapping}.
+    \item GPIO19 y GPIO20: USB nativo.
+    \item GPIO45: pin de \textit{strapping}.
+    \item GPIO46: pin de entrada solamente, además de \textit{strapping}.
+\end{itemize}
+
+
+
+
+\newpage
+
+\section{Asignación por categoría}
+
+\begin{table}[H]
+\centering
+\resizebox{0.55\columnwidth}{!}{
+\begin{tabular}{ccl}
+\toprule
+\textbf{GPIO} & \textbf{Categoría} & \textbf{Función} \\
+\midrule
+\multicolumn{3}{l}{\textbf{I2C}} \\
+\midrule
+8  & I2C   & SDA \\
+9  & I2C   & SCL \\
+
+\midrule
+\multicolumn{3}{l}{\textbf{SPI / SD}} \\
+\midrule
+10 & SPI   & SS (SD en placa principal) \\
+11 & SPI   & MOSI \\
+12 & SPI   & SCK \\
+13 & SPI   & MISO \\
+
+\midrule
+\multicolumn{3}{l}{\textbf{UART}} \\
+\midrule
+4  & UART  & RX auxiliar \\
+5  & UART  & TX auxiliar \\
+15 & UART  & RX módem \\
+16 & UART  & TX módem \\
+43 & UART  & TX0 (debug) \\
+44 & UART  & RX0 (debug) \\
+
+\midrule
+\multicolumn{3}{l}{\textbf{ADC}} \\
+\midrule
+1  & ADC   & Medición de batería \\
+
+\midrule
+\multicolumn{3}{l}{\textbf{Power Control}} \\
+\midrule
+2 & Power & \texttt{EN\_5V\_INT} \\
+41 & Power & \texttt{Gate\_3V3\_INT} \\
+42 & Power & \texttt{Gate\_MODEM} \\
+
+\midrule
+\multicolumn{3}{l}{\textbf{NeoPixel}} \\
+\midrule
+14 & LED   & Data NeoPixel \\
+
+\midrule
+\multicolumn{3}{l}{\textbf{Expansión (IDC)}} \\
+\midrule
+14 & IDC   & GPIO expansión \\
+21 & IDC   & GPIO expansión \\
+35 & IDC   & GPIO expansión \\
+36 & IDC   & GPIO expansión \\
+37 & IDC   & GPIO expansión \\
+38 & IDC   & GPIO expansión \\
+39 & IDC   & GPIO expansión \\
+40 & IDC   & GPIO expansión \\
+47 & IDC   & GPIO expansión \\
+48 & IDC   & GPIO expansión \\
+
+\midrule
+\multicolumn{3}{l}{\textbf{Reservados / Evitados}} \\
+\midrule
+0  & Reserved & Strapping (boot) \\
+3  & Reserved & Strapping (boot) \\
+19 & Reserved & USB D- \\
+20 & Reserved & USB D+ \\
+45 & Reserved & Strapping \\
+46 & Reserved & Input-only + strapping \\
+\bottomrule
+\end{tabular}
+}
+\caption{Asignación de pines agrupada por categoría}
+\end{table}
+
+\section{Asignación por Pin GPIO ESP32}
+
+\begin{table}[H]
+\centering
+\resizebox{0.7\columnwidth}{!}{
+\begin{tabular}{cll}
+\toprule
+\textbf{GPIO} & \textbf{Categoría} & \textbf{Función} \\
+\midrule
+0   & Strapping & No usar (boot)\\
+1   & ADC & Lectura batería (ADC1\_CH0) \\
+2   & Power Control & Pin Enable de StepDown $5V_{INT}$\\
+3   & Strapping & No usar (boot)\\
+4   & UART & RX auxiliar \\
+5   & UART & TX auxiliar \\
+6   & GPIO & Botón 1 \\
+7   & GPIO & Botón 2 \\
+8   & I2C & SDA \\
+9   & I2C & SCL \\
+10  & SPI & SS (SD en placa principal) \\
+11  & SPI & MOSI \\
+12  & SPI & SCK \\
+13  & SPI & MISO \\
+14  & GPIO / LED & NeoPixel (también exportado a IDC) \\
+15  & UART & RX módem \\
+16  & UART & TX módem \\
+17  & GPIO (JST) & Expansión \\
+18  & GPIO (JST) & Expansión \\
+19  & USB D- & Pin D- de comunicación USB \\
+20  & USB D+ & Pin D+ de comunicación USB \\
+21  & GPIO (IDC) & Expansión \\
+35  & GPIO (IDC) & Expansión \\
+36  & GPIO (IDC) & Expansión \\
+37  & GPIO (IDC) & Expansión \\
+38  & GPIO (IDC) & Expansión \\
+39  & GPIO (IDC) & Expansión \\
+40  & GPIO (IDC) & Expansión \\
+41  & Power Control & \texttt{Gate\_3V3INT} \\
+42  & Power Control & \texttt{Gate\_MODEM} \\
+43  & UART & TX0 (programación / debug) \\
+44  & UART & RX0 (programación / debug) \\
+45  & Strapping & No usar \\
+46  & Strapping & No usar \\
+47  & GPIO (IDC) & Expansión \\
+48  & GPIO (IDC) & Expansión \\
+\bottomrule
+\end{tabular}
+}
+\caption{Asignación global de pines del sistema}
+\label{tab:pinout_global}
+\end{table}
+
+
+
+\newpage%-------------------------------------------------\section{Asignación conectores}
+
+\begin{table}[H]
+\centering
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{cll}
+\toprule
+\textbf{Pin} & \textbf{Señal} & \textbf{Descripción} \\
+\midrule
+
+\multicolumn{3}{l}{\textbf{IDC-26 (J8)}} \\
+\midrule
+1  & \texttt{12V}     & Alimentación 12V \\
+2  & \texttt{12V}     & Alimentación 12V \\
+3  & \texttt{5V\_INT} & Alimentación 5V \\
+4  & \texttt{5V\_INT} & Alimentación 5V \\
+5  & \texttt{3V3\_INT} & Rail conmutable \\
+6  & \texttt{3V3\_INT} & Rail conmutable \\
+7  & \texttt{3V3}      & Rail principal \\
+8  & \texttt{IO47}     & GPIO \\
+9  & \texttt{IO21}     & GPIO \\
+10 & \texttt{IO48}     & GPIO \\
+11 & \texttt{IO14}     & GPIO / NeoPixel \\
+12 & \texttt{IO35}     & GPIO \\
+13 & \texttt{IO13}     & SPI MISO \\
+14 & \texttt{IO36}     & GPIO \\
+15 & \texttt{IO12}     & SPI SCK \\
+16 & \texttt{IO37}     & GPIO \\
+17 & \texttt{IO11}     & SPI MOSI \\
+18 & \texttt{IO38}     & GPIO \\
+19 & \texttt{IO9}      & I2C SCL \\
+20 & \texttt{IO39}     & GPIO \\
+21 & \texttt{IO8}      & I2C SDA \\
+22 & \texttt{IO40}     & GPIO \\
+23 & \texttt{GND}      & Tierra \\
+24 & \texttt{GND}      & Tierra \\
+25 & \texttt{GND}      & Tierra \\
+26 & \texttt{GND}      & Tierra \\
+
+\midrule
+\multicolumn{3}{l}{\textbf{Plantower (J1)}} \\
+\midrule
+1 & \texttt{N/C} & --- \\
+2 & \texttt{N/C} & --- \\
+3 & \texttt{N/C} & --- \\
+4 & \texttt{IO4} & UART RX \\
+5 & \texttt{IO5} & UART TX \\
+6 & \texttt{N/C} & --- \\
+7 & \texttt{GND} & Tierra \\
+8 & \texttt{5V\_INT} & Alimentación \\
+
+\midrule
+\multicolumn{3}{l}{\textbf{I2C (J2)}} \\
+\midrule
+1 & \texttt{GND} & Tierra \\
+2 & \texttt{3V3\_INT} & Alimentación \\
+3 & \texttt{IO9} & SCL \\
+4 & \texttt{IO8} & SDA \\
+
+\midrule
+\multicolumn{3}{l}{\textbf{I2C (J3)}} \\
+\midrule
+1 & \texttt{GND} & Tierra \\
+2 & \texttt{3V3\_INT} & Alimentación \\
+3 & \texttt{IO9} & SCL \\
+4 & \texttt{IO8} & SDA \\
+
+\midrule
+\multicolumn{3}{l}{\textbf{Botón (J4)}} \\
+\midrule
+1 & \texttt{GND} & Tierra \\
+2 & \texttt{IO6} & Entrada botón \\
+
+\midrule
+\multicolumn{3}{l}{\textbf{Botón (J5)}} \\
+\midrule
+1 & \texttt{GND} & Tierra \\
+2 & \texttt{IO7} & Entrada botón \\
+
+\midrule
+\multicolumn{3}{l}{\textbf{GPIO (J6)}} \\
+\midrule
+1 & \texttt{GND} & Tierra \\
+2 & \texttt{3V3\_INT} & Alimentación \\
+3 & \texttt{IO18} & GPIO \\
+4 & \texttt{IO17} & GPIO \\
+
+\midrule
+\multicolumn{3}{l}{\textbf{NeoPixel (J7)}} \\
+\midrule
+1 & \texttt{GND} & Tierra \\
+2 & \texttt{3V3} & Alimentación \\
+3 & \texttt{IO14} & Data \\
+
+\bottomrule
+\end{tabular}
+\caption{Resumen completo de conectores y pinout}
+\end{table}
+
+\printbibliography
+
+\end{document}
